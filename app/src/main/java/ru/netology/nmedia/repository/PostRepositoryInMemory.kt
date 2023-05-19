@@ -1,30 +1,48 @@
 package ru.netology.nmedia.repository
 
+import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import ru.netology.nmedia.dto.Post
 
-class PostRepositoryInMemory : PostRepository {
+class PostRepositoryInMemory(
+    private  val context: Context,
+) : PostRepository {
 
-    private var nextId = 0L
-    private var posts = listOf(
-        Post(
-            id = ++nextId,
-            author = "Нетология. Университет интернет профессий будущего !",
-            content = "Это short пост. ",
-            published = "12 мая 2023 года ",
-            likedByMe = false,
-            likes = 11,
-            reposts = 1499999,
-            sees = 1099,
-            video = "https://www.youtube.com/watch?v=yIPqxSgObKg"
-        )
-    ).reversed()
+    companion object {
+        private  const val FILE_NAME ="posts.json"
+    }
+
+    private val type = TypeToken.getParameterized(List::class.java, Post::class.java).type
+    private val gson = Gson()
+    private var posts : List<Post> = readPosts()
+            set(value) {
+                field = value
+                sync()
+            }
 
     private val data = MutableLiveData(posts)
 
-
     override fun getData(): LiveData<List<Post>> = data
+
+    private  fun sync() {
+        context.openFileOutput(FILE_NAME, Context.MODE_PRIVATE).bufferedWriter().use {
+            it.write(gson.toJson(posts))
+        }
+    }
+
+    private fun readPosts():List<Post> {
+        val file = context.filesDir.resolve(FILE_NAME)
+        return if (file.exists()) {
+            context.openFileInput(FILE_NAME).bufferedReader().use {
+            gson.fromJson(it, type)
+            }
+        } else {
+            emptyList()
+        }
+    }
 
     override fun likeById(id: Long) {
         posts = posts.map { post ->
@@ -74,7 +92,7 @@ class PostRepositoryInMemory : PostRepository {
         if(post.id == 0L) {
             posts = listOf(
                 post.copy(
-                    id = ++nextId,
+                    id = (posts.firstOrNull()?.id ?:0L)+1,
                     author = "Me",
                     published = "now",
                     likedByMe = false,
